@@ -1,0 +1,33 @@
+<resources>
+    <string name="app_name">AI Bodyguard</string>
+    <string name="security_badge">Perimeter Access</string>
+    <string name="auth_screen_title">Secure the AI Bodyguard app before you add trusted faces and alerts.</string>
+    <string name="auth_screen_subtitle">This mobile client is where you will manage trusted users, suspicious activity notifications, and the robot control experience.</string>
+    <string name="auth_form_title_login">Sign in to the operator console</string>
+    <string name="auth_form_subtitle_login">Use the account that already exists on the Spring backend.</string>
+    <string name="auth_form_title_register">Create the first trusted operator</string>
+    <string name="auth_form_subtitle_register">Register the account that owns the robot before you add the rest of the application features.</string>
+    <string name="mode_login">Login</string>
+    <string name="mode_register">Register</string>
+    <string name="email_hint">Email address</string>
+    <string name="password_hint">Password</string>
+    <string name="confirm_password_hint">Confirm password</string>
+    <string name="auth_action_login">Sign in</string>
+    <string name="auth_action_register">Create account</string>
+    <string name="session_title">Trusted operator active</string>
+    <string name="session_subtitle">This device can now receive suspicious activity alerts from the robot.</string>
+    <string name="session_email_value">Signed in as %1$s</string>
+    <string name="session_role_value">Role: %1$s</string>
+    <string name="logout_action">Log out</string>
+    <string name="session_restored_message">Saved session restored on this device.</string>
+    <string name="logged_out_message">Session cleared from this device.</string>
+    <string name="login_success_message">Login successful. The app is ready for the next feature.</string>
+    <string name="register_success_message">Account created and trusted on this device.</string>
+    <string name="loading_auth">Contacting the backend...</string>
+    <string name="generic_auth_error">Authentication failed.</string>
+    <string name="invalid_email_error">Enter a valid email address.</string>
+    <string name="password_required_error">Password is required.</string>
+    <string name="register_password_length_error">Password must be at least 6 characters.</string>
+    <string name="confirm_password_required_error">Confirm your password.</string>
+    <string name="password_mismatch_error">Passwords do not match.</string>
+</resources>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="guard_background">#09131B</color>
+    <color name="guard_surface">#132431</color>
+    <color name="guard_border">#294052</color>
+    <color name="guard_primary">#F4B544</color>
+    <color name="guard_primary_dark">#C88C1C</color>
+    <color name="guard_on_primary">#09131B</color>
+    <color name="guard_success">#5AD9A8</color>
+    <color name="guard_error">#FF7676</color>
+    <color name="guard_text_primary">#F4F7F9</color>
+    <color name="guard_text_secondary">#A8BAC7</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>
