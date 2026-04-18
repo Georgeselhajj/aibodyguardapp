@@ -34,6 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
+import com.aibodyguard.app.MainActivity
+import com.aibodyguard.app.SessionManager
 import com.aibodyguard.app.dashboard.model.Member
 import com.aibodyguard.app.enrollment.FaceEnrollmentActivity
 import com.aibodyguard.app.enrollment.model.PersonRole
@@ -43,6 +45,7 @@ import com.aibodyguard.app.ui.theme.AIBodyguardTheme
 class DashboardActivity : ComponentActivity() {
 
     private lateinit var dashboardViewModel: DashboardViewModel
+    private lateinit var sessionManager: SessionManager
 
     // Result launcher — receives RESULT_OK when enrollment succeeds
     private val enrollmentLauncher = registerForActivityResult(
@@ -61,14 +64,20 @@ class DashboardActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         dashboardViewModel = ViewModelProvider(this)[DashboardViewModel::class.java]
+        sessionManager = SessionManager(this)
 
         setContent {
             AIBodyguardTheme {
                 var showEnrollDialog by remember { mutableStateOf(false) }
 
                 DashboardRoute(
-                    viewModel         = dashboardViewModel,
+                    viewModel          = dashboardViewModel,
                     onAddTrustedMember = { showEnrollDialog = true },
+                    onLogout           = {
+                        sessionManager.clearSession()
+                        startActivity(android.content.Intent(this, MainActivity::class.java))
+                        finish()
+                    },
                 )
 
                 if (showEnrollDialog) {

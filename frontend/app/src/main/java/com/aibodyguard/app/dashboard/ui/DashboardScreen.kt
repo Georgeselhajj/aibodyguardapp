@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -64,7 +65,8 @@ import com.aibodyguard.app.ui.theme.AIBodyguardTheme
 @Composable
 fun DashboardRoute(
     viewModel: DashboardViewModel = viewModel(),
-    onAddTrustedMember: () -> Unit = {}
+    onAddTrustedMember: () -> Unit = {},
+    onLogout: () -> Unit = {}
 ) {
     val robotConnected by viewModel.robotConnected.collectAsStateWithLifecycle()
     val securityMode by viewModel.securityMode.collectAsStateWithLifecycle()
@@ -81,7 +83,8 @@ fun DashboardRoute(
         onAddTrustedMember = {
             viewModel.onAddTrustedMember()
             onAddTrustedMember()
-        }
+        },
+        onLogout = { viewModel.logout(onLogout) }
     )
 }
 
@@ -94,12 +97,13 @@ fun DashboardScreen(
     carouselItems: List<CarouselItem>,
     onSecurityModeSelected: (SecurityMode) -> Unit,
     onAddTrustedMember: () -> Unit,
+    onLogout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { DashboardTopBar(robotConnected = robotConnected) }
+        topBar = { DashboardTopBar(robotConnected = robotConnected, onLogout = onLogout) }
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -114,8 +118,14 @@ fun DashboardScreen(
             item {
                 AlertsHeader()
             }
-            items(alerts) { alert ->
-                AlertCard(alert = alert)
+            if (alerts.isEmpty()) {
+                item {
+                    EmptyAlertsCard()
+                }
+            } else {
+                items(alerts) { alert ->
+                    AlertCard(alert = alert)
+                }
             }
             item {
                 SecurityModeSection(
@@ -135,7 +145,7 @@ fun DashboardScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DashboardTopBar(robotConnected: Boolean) {
+private fun DashboardTopBar(robotConnected: Boolean, onLogout: () -> Unit) {
     TopAppBar(
         title = {
             Text(
@@ -146,7 +156,14 @@ private fun DashboardTopBar(robotConnected: Boolean) {
         },
         actions = {
             RobotStatusIndicator(robotConnected = robotConnected)
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            IconButton(onClick = onLogout) {
+                Icon(
+                    imageVector = Icons.Default.ExitToApp,
+                    contentDescription = "Logout",
+                    tint = MaterialTheme.colorScheme.onBackground
+                )
+            }
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.background,
@@ -299,6 +316,24 @@ private fun AlertsHeader() {
         title = "Recent Alerts",
         subtitle = "Latest robot notifications and incident summaries."
     )
+}
+
+@Composable
+private fun EmptyAlertsCard() {
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Text(
+            text = "No alerts from the robot right now.",
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+    }
 }
 
 @Composable

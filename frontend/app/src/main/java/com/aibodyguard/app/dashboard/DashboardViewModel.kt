@@ -1,50 +1,33 @@
 package com.aibodyguard.app.dashboard
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.aibodyguard.app.dashboard.model.Alert
 import com.aibodyguard.app.dashboard.model.CarouselItem
 import com.aibodyguard.app.dashboard.model.Member
 import com.aibodyguard.app.dashboard.model.SecurityMode
+import com.aibodyguard.app.network.RobotRetrofitClient
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 class DashboardViewModel : ViewModel() {
 
-    private val _robotConnected = MutableStateFlow(true)
+    private val repository = RobotDashboardRepository(RobotRetrofitClient.enrollmentApi)
+
+    private val _robotConnected = MutableStateFlow(false)
     val robotConnected: StateFlow<Boolean> = _robotConnected.asStateFlow()
 
     private val _securityMode = MutableStateFlow(SecurityMode.HOME)
     val securityMode: StateFlow<SecurityMode> = _securityMode.asStateFlow()
 
-    private val _alerts = MutableStateFlow(
-        listOf(
-            Alert(
-                title = "Suspicious Person Detected",
-                description = "The robot flagged repeated movement near the front entrance.",
-                timestamp = "2 min ago"
-            ),
-            Alert(
-                title = "Unrecognized Motion Pattern",
-                description = "Unexpected activity was detected in the backyard perimeter.",
-                timestamp = "12 min ago"
-            ),
-            Alert(
-                title = "Patrol Route Interrupted",
-                description = "Smart patrol paused briefly and resumed after obstacle avoidance.",
-                timestamp = "31 min ago"
-            )
-        )
-    )
+    private val _alerts = MutableStateFlow<List<Alert>>(emptyList())
     val alerts: StateFlow<List<Alert>> = _alerts.asStateFlow()
 
-    private val _trustedMembers = MutableStateFlow(
-        listOf(
-            Member(name = "Maya", imageRes = android.R.drawable.ic_menu_myplaces),
-            Member(name = "Omar", imageRes = android.R.drawable.ic_menu_camera),
-            Member(name = "Lea", imageRes = android.R.drawable.ic_menu_info_details)
-        )
-    )
+    private val _trustedMembers = MutableStateFlow<List<Member>>(emptyList())
     val trustedMembers: StateFlow<List<Member>> = _trustedMembers.asStateFlow()
 
     val carouselItems: List<CarouselItem> = listOf(
@@ -65,19 +48,103 @@ class DashboardViewModel : ViewModel() {
         )
     )
 
+    init {
+        bootstrapDefaultMode()
+        startRobotPolling()
+    }
+
+    fun logout(onComplete: () -> Unit) {
+        viewModelScope.launch {
+            repository.stopDetection()
+            onComplete()
+        }
+    }
+
     fun onSecurityModeSelected(mode: SecurityMode) {
-        _securityMode.value = mode
+        viewModelScope.launch {
+            repository.applyModeAndStart(mode)
+                .onSuccess {
+                    _securityMode.value = mode
+                    refreshRobotStatusAndAlerts()
+                }
+                .onFailure {
+                    _robotConnected.value = false
+                }
+        }
     }
 
     fun onAddTrustedMember() {
-        // Handled by DashboardActivity — opens EnrollMemberDialog → FaceEnrollmentActivity.
+        // Handled by DashboardActivity, which opens the enrollment flow.
     }
 
-    /** Called when FaceEnrollmentActivity returns RESULT_OK with an enrolled name. */
     fun onMemberEnrolled(name: String) {
-        val current = _trustedMembers.value.toMutableList()
-        // Add the newly enrolled member (placeholder icon — replace with real photo later)
-        current.add(Member(name = name, imageRes = android.R.drawable.ic_menu_camera))
-        _trustedMembers.value = current
+        viewModelScope.launch {
+            refreshTrustedMembers()
+        }
+    }
+
+    private fun refreshDashboard() {
+        viewModelScope.launch {
+            refreshRobotStatusAndAlerts()
+            refreshTrustedMembers()
+        }
+    }
+
+    private fun bootstrapDefaultMode() {
+        viewModelScope.launch {
+            _securityMode.value = SecurityMode.HOME
+
+            repository.applyModeAndStart(SecurityMode.HOME)
+                .onFailure {
+                    _robotConnected.value = false
+                }
+
+            refreshDashboard()
+        }
+    }
+
+    private fun startRobotPolling() {
+        viewModelScope.launch {
+            while (isActive) {
+                refreshRobotStatusAndAlerts()
+                delay(3000)
+            }
+        }
+    }
+
+    private suspend fun refreshRobotStatusAndAlerts() {
+        repository.fetchStatus()
+            .onSuccess { status ->
+                _robotConnected.value = true
+                _securityMode.value = if (status.mode.equals("AWAY", ignoreCase = true)) {
+                    SecurityMode.AWAY
+                } else {
+                    SecurityMode.HOME
+                }
+            }
+            .onFailure {
+                _robotConnected.value = false
+                return
+            }
+
+        repository.fetchAlerts()
+            .onSuccess { alerts ->
+                _alerts.value = alerts
+            }
+            .onFailure {
+                _alerts.value = emptyList()
+            }
+    }
+
+    private suspend fun refreshTrustedMembers() {
+        repository.fetchTrustedMembers()
+            .onSuccess { members ->
+                _trustedMembers.value = members
+            }
+            .onFailure {
+                if (_trustedMembers.value.isEmpty()) {
+                    _trustedMembers.value = emptyList()
+                }
+            }
     }
 }

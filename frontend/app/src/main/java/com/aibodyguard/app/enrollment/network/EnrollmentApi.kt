@@ -1,5 +1,9 @@
 package com.aibodyguard.app.enrollment.network
 
+import com.aibodyguard.app.dashboard.model.RobotAlertResponse
+import com.aibodyguard.app.dashboard.model.RobotCommandResponse
+import com.aibodyguard.app.dashboard.model.RobotModeRequest
+import com.aibodyguard.app.dashboard.model.RobotStatusResponse
 import com.aibodyguard.app.enrollment.model.EnrolledPersonInfo
 import com.aibodyguard.app.enrollment.model.EnrollmentRequest
 import com.aibodyguard.app.enrollment.model.EnrollmentResponse
@@ -9,6 +13,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * Retrofit interface for the Raspberry Pi enrollment server.
@@ -47,4 +52,23 @@ interface EnrollmentApi {
      */
     @GET("api/v1/health")
     suspend fun health(): Response<Unit>
+
+    @GET("api/v1/status")
+    suspend fun getStatus(): Response<RobotStatusResponse>
+
+    @POST("api/v1/start")
+    suspend fun startDetection(): Response<RobotCommandResponse>
+
+    @POST("api/v1/stop")
+    suspend fun stopDetection(): Response<RobotCommandResponse>
+
+    @POST("api/v1/mode")
+    suspend fun setMode(
+        @Body request: RobotModeRequest,
+    ): Response<RobotCommandResponse>
+
+    @GET("api/v1/alerts")
+    suspend fun getAlerts(
+        @Query("limit") limit: Int = 20,
+    ): Response<List<RobotAlertResponse>>
 }
