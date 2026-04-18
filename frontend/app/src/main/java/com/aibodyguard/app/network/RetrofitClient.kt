@@ -9,7 +9,7 @@ object RetrofitClient {
 
     // 10.0.2.2 maps the Android emulator back to the host machine.
     // Replace this with your computer's LAN IP when testing on a physical phone.
-    private const val BASE_URL = "http://10.0.2.2:8080/"
+    private const val BASE_URL = "http://10.42.0.183:8080/"
 
     private val logging = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY

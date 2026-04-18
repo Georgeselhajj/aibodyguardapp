@@ -1,16 +1,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="true" />
 
     <application
         android:allowBackup="true"
+        android:usesCleartextTraffic="true"
         android:label="@string/app_name"
-        android:theme="@style/Theme.AIBodyguard"
-        android:usesCleartextTraffic="true">
+        android:theme="@style/Theme.AIBodyguard">
 
         <activity
             android:name=".dashboard.DashboardActivity"
             android:exported="false" />
+
+        <activity
+            android:name=".enrollment.FaceEnrollmentActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
 
         <activity
             android:name=".MainActivity"

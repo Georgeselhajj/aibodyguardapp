@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la /d/Desktop/new_bodyguard-robot/robot-bodyguard/yolov5/*.py)"
+    ]
+  }
+}

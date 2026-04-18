@@ -70,6 +70,14 @@ class DashboardViewModel : ViewModel() {
     }
 
     fun onAddTrustedMember() {
-        // Placeholder for future member enrollment flow.
+        // Handled by DashboardActivity — opens EnrollMemberDialog → FaceEnrollmentActivity.
+    }
+
+    /** Called when FaceEnrollmentActivity returns RESULT_OK with an enrolled name. */
+    fun onMemberEnrolled(name: String) {
+        val current = _trustedMembers.value.toMutableList()
+        // Add the newly enrolled member (placeholder icon — replace with real photo later)
+        current.add(Member(name = name, imageRes = android.R.drawable.ic_menu_camera))
+        _trustedMembers.value = current
     }
 }
