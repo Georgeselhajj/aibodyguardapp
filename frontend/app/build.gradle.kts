@@ -78,3 +78,7 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
+
+tasks.register("testClasses") {
+    dependsOn("compileDebugUnitTestKotlin")
+}

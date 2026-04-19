@@ -61,3 +61,16 @@ data class RobotCommandResponse(
     val mode: String? = null,
     val message: String? = null,
 )
+
+data class ThreatEnrollRequest(
+    val threat_id: String,
+    val name: String,
+    val images: List<String>,
+)
+
+data class ThreatPersonResponse(
+    val threat_id: String,
+    val name: String,
+    val sample_count: Int,
+    val enrolled_at: String?,
+)

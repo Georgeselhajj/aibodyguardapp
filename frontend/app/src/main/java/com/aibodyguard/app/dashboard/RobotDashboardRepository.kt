@@ -5,7 +5,10 @@ import com.aibodyguard.app.dashboard.model.Member
 import com.aibodyguard.app.dashboard.model.RobotModeRequest
 import com.aibodyguard.app.dashboard.model.RobotStatusResponse
 import com.aibodyguard.app.dashboard.model.SecurityMode
+import com.aibodyguard.app.dashboard.model.ThreatEnrollRequest
+import com.aibodyguard.app.dashboard.model.ThreatPerson
 import com.aibodyguard.app.enrollment.model.EnrolledPersonInfo
+import com.aibodyguard.app.enrollment.model.EnrollmentRequest
 import com.aibodyguard.app.enrollment.model.PersonRole
 import com.aibodyguard.app.enrollment.network.EnrollmentApi
 import kotlinx.coroutines.Dispatchers
@@ -55,7 +58,56 @@ class RobotDashboardRepository(
             if (!response.isSuccessful) {
                 throw Exception("HTTP ${response.code()}")
             }
-            response.body().orEmpty().map { person -> person.toMember() }
+            response.body().orEmpty()
+                .filter { !it.role.equals("threat", ignoreCase = true) }
+                .map { person -> person.toMember() }
+        }
+    }
+
+    suspend fun deleteMember(personId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = api.deletePerson(personId)
+            if (!response.isSuccessful) {
+                throw Exception("HTTP ${response.code()}")
+            }
+        }
+    }
+
+    suspend fun enrollThreat(threatId: String, name: String, images: List<String>): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val response = api.enrollPerson(
+                    EnrollmentRequest(
+                        person_id = threatId,
+                        name      = name,
+                        role      = "threat",
+                        images    = images,
+                    )
+                )
+                if (!response.isSuccessful) {
+                    throw Exception("HTTP ${response.code()}: ${response.errorBody()?.string()}")
+                }
+            }
+        }
+
+    suspend fun fetchThreats(): Result<List<ThreatPerson>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = api.listThreats()
+            if (!response.isSuccessful) {
+                throw Exception("HTTP ${response.code()}")
+            }
+            response.body().orEmpty().map { t ->
+                ThreatPerson(name = t.name, photoUris = emptyList(), id = t.threat_id)
+            }
+        }
+    }
+
+    suspend fun deleteThreat(threatId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = api.deleteThreat(threatId)
+            if (!response.isSuccessful) {
+                throw Exception("HTTP ${response.code()}")
+            }
         }
     }
 

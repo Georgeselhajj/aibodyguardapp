@@ -117,30 +117,36 @@ class DashboardViewModel : ViewModel() {
         viewModelScope.launch { refreshTrustedMembers() }
     }
 
-    /**
-     * Remove a trusted member from the list locally.
-     * TODO: also call EnrollmentRepository.deletePerson(memberId) once the Pi
-     *       endpoint is wired up so the robot stops recognizing them.
-     */
     fun onRemoveMember(memberId: String) {
         _trustedMembers.value = _trustedMembers.value.filterNot { it.id == memberId }
+        viewModelScope.launch {
+            robotRepository.deleteMember(memberId)
+        }
     }
 
-    /**
-     * Register a new threat person from gallery photos.
-     * TODO: upload [photoUris] to the Pi/model so it learns to flag this person.
-     */
-    fun onAddThreat(name: String, photoUris: List<String>) {
-        if (name.isBlank() || photoUris.isEmpty()) return
-        _threats.value = _threats.value + ThreatPerson(name = name.trim(), photoUris = photoUris)
+    /** Called with base64-encoded images (UI converts URIs → base64 before calling). */
+    fun onAddThreat(name: String, base64Images: List<String>) {
+        if (name.isBlank() || base64Images.isEmpty()) return
+        val threatId = "threat_${System.currentTimeMillis()}"
+        val person   = ThreatPerson(name = name.trim(), photoUris = base64Images, id = threatId)
+        _threats.value = _threats.value + person
+        viewModelScope.launch {
+            robotRepository.enrollThreat(threatId, name.trim(), base64Images)
+        }
     }
 
-    /**
-     * Remove a threat person from the list.
-     * TODO: also call the Pi endpoint to forget the person once it exists.
-     */
     fun onRemoveThreat(threatId: String) {
         _threats.value = _threats.value.filterNot { it.id == threatId }
+        viewModelScope.launch {
+            robotRepository.deleteThreat(threatId)
+        }
+    }
+
+    fun refreshThreats() {
+        viewModelScope.launch {
+            robotRepository.fetchThreats()
+                .onSuccess { list -> _threats.value = list }
+        }
     }
 
     /** Create a user-authored alert in the Spring Boot DB. */
@@ -167,6 +173,8 @@ class DashboardViewModel : ViewModel() {
         viewModelScope.launch {
             refreshRobotStatusAndAlerts()
             refreshTrustedMembers()
+            robotRepository.fetchThreats()
+                .onSuccess { list -> _threats.value = list }
         }
     }
 

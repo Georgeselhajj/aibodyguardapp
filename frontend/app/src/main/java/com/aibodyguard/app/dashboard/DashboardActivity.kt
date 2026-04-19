@@ -1,13 +1,23 @@
 package com.aibodyguard.app.dashboard
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
 import android.os.Bundle
+import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -79,7 +89,18 @@ class DashboardActivity : ComponentActivity() {
                     val name = pendingThreatName
                     pendingThreatName = null
                     if (name != null && uris.isNotEmpty()) {
-                        dashboardViewModel.onAddThreat(name, uris.map { it.toString() })
+                        lifecycleScope.launch {
+                            val base64Images = withContext(Dispatchers.IO) {
+                                uris.mapNotNull { uri ->
+                                    runCatching {
+                                        uriToBase64Jpeg(uri)
+                                    }.getOrNull()
+                                }
+                            }
+                            if (base64Images.isNotEmpty()) {
+                                dashboardViewModel.onAddThreat(name, base64Images)
+                            }
+                        }
                     }
                 }
 
@@ -133,6 +154,54 @@ class DashboardActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Decode a gallery URI → EXIF-corrected → scaled to max 640px → JPEG 75 → Base64.
+     * Identical pipeline to FaceEnrollmentScreen.toBase64Jpeg() for camera frames.
+     */
+    private fun uriToBase64Jpeg(uri: Uri): String? {
+        // Read EXIF rotation from first stream
+        val rotation = try {
+            contentResolver.openInputStream(uri)?.use { s ->
+                val exif = ExifInterface(s)
+                when (exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                    ExifInterface.ORIENTATION_ROTATE_90  -> 90
+                    ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                    ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                    else -> 0
+                }
+            } ?: 0
+        } catch (_: Exception) { 0 }
+
+        // Decode bitmap from second stream
+        val raw = contentResolver.openInputStream(uri)?.use { s ->
+            BitmapFactory.decodeStream(s)
+        } ?: return null
+
+        // Apply EXIF rotation
+        val upright = if (rotation != 0) {
+            val m = Matrix().apply { postRotate(rotation.toFloat()) }
+            Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, m, true)
+                .also { if (it !== raw) raw.recycle() }
+        } else raw
+
+        // Scale so longest side ≤ 640 px
+        val maxDim = 640
+        val scale = maxDim.toFloat() / maxOf(upright.width, upright.height)
+        val scaled = if (scale < 1f) {
+            Bitmap.createScaledBitmap(
+                upright,
+                (upright.width * scale).toInt(),
+                (upright.height * scale).toInt(),
+                true,
+            ).also { if (it !== upright) upright.recycle() }
+        } else upright
+
+        val out = ByteArrayOutputStream()
+        scaled.compress(Bitmap.CompressFormat.JPEG, 75, out)
+        scaled.recycle()
+        return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
     }
 
     companion object {

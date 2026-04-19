@@ -69,7 +69,7 @@ class FaceEnrollmentViewModel(
                 val inWindow = state.stage.poseMatches(result.yaw, result.pitch)
                 _uiState.update { it.copy(faceDetected = true, poseInWindow = inWindow) }
 
-                if (inWindow) {
+                if (inWindow && result.imageBase64.isNotEmpty()) {
                     val now = System.currentTimeMillis()
                     if (now - lastCaptureTimeMs >= captureIntervalMs) {
                         lastCaptureTimeMs = now

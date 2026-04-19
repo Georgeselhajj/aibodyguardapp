@@ -6,6 +6,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.aibodyguard.app.enrollment.model.EnrollmentResult
 import com.aibodyguard.app.enrollment.model.PersonRole
 import com.aibodyguard.app.enrollment.ui.EnrollmentSuccessScreen
@@ -26,9 +29,9 @@ import com.aibodyguard.app.ui.theme.AIBodyguardTheme
  */
 class FaceEnrollmentActivity : ComponentActivity() {
 
-    private var showSuccess = false
-    private var successName = ""
-    private var successSamples = 0
+    private var showSuccess by mutableStateOf(false)
+    private var successName by mutableStateOf("")
+    private var successSamples by mutableStateOf(0)
     private var enrolledRole: PersonRole = PersonRole.FAMILY_MEMBER
 
     override fun onCreate(savedInstanceState: Bundle?) {

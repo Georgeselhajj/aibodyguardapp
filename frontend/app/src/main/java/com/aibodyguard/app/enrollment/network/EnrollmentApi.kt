@@ -4,6 +4,8 @@ import com.aibodyguard.app.dashboard.model.RobotAlertResponse
 import com.aibodyguard.app.dashboard.model.RobotCommandResponse
 import com.aibodyguard.app.dashboard.model.RobotModeRequest
 import com.aibodyguard.app.dashboard.model.RobotStatusResponse
+import com.aibodyguard.app.dashboard.model.ThreatEnrollRequest
+import com.aibodyguard.app.dashboard.model.ThreatPersonResponse
 import com.aibodyguard.app.enrollment.model.EnrolledPersonInfo
 import com.aibodyguard.app.enrollment.model.EnrollmentRequest
 import com.aibodyguard.app.enrollment.model.EnrollmentResponse
@@ -71,4 +73,17 @@ interface EnrollmentApi {
     suspend fun getAlerts(
         @Query("limit") limit: Int = 20,
     ): Response<List<RobotAlertResponse>>
+
+    @POST("api/v1/threats")
+    suspend fun enrollThreat(
+        @Body request: ThreatEnrollRequest,
+    ): Response<RobotCommandResponse>
+
+    @GET("api/v1/threats")
+    suspend fun listThreats(): Response<List<ThreatPersonResponse>>
+
+    @DELETE("api/v1/threats/{threat_id}")
+    suspend fun deleteThreat(
+        @Path("threat_id") threatId: String,
+    ): Response<RobotCommandResponse>
 }
