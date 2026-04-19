@@ -1,9 +1,12 @@
 package com.aibodyguard.app.dashboard
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
+import com.aibodyguard.app.SessionManager
 import com.aibodyguard.app.dashboard.model.Member
 import com.aibodyguard.app.enrollment.FaceEnrollmentActivity
 import com.aibodyguard.app.enrollment.model.PersonRole
@@ -52,7 +56,11 @@ class DashboardActivity : ComponentActivity() {
             val enrolledName = result.data?.getStringExtra(
                 FaceEnrollmentActivity.EXTRA_ENROLLED_NAME
             ) ?: return@registerForActivityResult
-            dashboardViewModel.onMemberEnrolled(enrolledName)
+            val enrolledRole = result.data
+                ?.getStringExtra(FaceEnrollmentActivity.EXTRA_ENROLLED_ROLE)
+                ?.let { runCatching { PersonRole.valueOf(it) }.getOrNull() }
+                ?: PersonRole.FAMILY_MEMBER
+            dashboardViewModel.onMemberEnrolled(enrolledName, enrolledRole)
         }
     }
 
@@ -61,14 +69,30 @@ class DashboardActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         dashboardViewModel = ViewModelProvider(this)[DashboardViewModel::class.java]
+        dashboardViewModel.bindUser(SessionManager(this).getEmail())
 
         setContent {
             AIBodyguardTheme {
                 var showEnrollDialog by remember { mutableStateOf(false) }
+                var showAddAlertDialog by remember { mutableStateOf(false) }
+                var pendingThreatName by remember { mutableStateOf<String?>(null) }
+                var showAddThreatDialog by remember { mutableStateOf(false) }
+
+                val pickThreatPhotos = rememberLauncherForActivityResult(
+                    ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
+                ) { uris: List<Uri> ->
+                    val name = pendingThreatName
+                    pendingThreatName = null
+                    if (name != null && uris.isNotEmpty()) {
+                        dashboardViewModel.onAddThreat(name, uris.map { it.toString() })
+                    }
+                }
 
                 DashboardRoute(
                     viewModel         = dashboardViewModel,
                     onAddTrustedMember = { showEnrollDialog = true },
+                    onAddAlert        = { showAddAlertDialog = true },
+                    onAddThreat       = { showAddThreatDialog = true },
                 )
 
                 if (showEnrollDialog) {
@@ -78,6 +102,31 @@ class DashboardActivity : ComponentActivity() {
                             showEnrollDialog = false
                             enrollmentLauncher.launch(
                                 FaceEnrollmentActivity.createIntent(this, name, role)
+                            )
+                        },
+                    )
+                }
+
+                if (showAddAlertDialog) {
+                    AddAlertDialog(
+                        onDismiss = { showAddAlertDialog = false },
+                        onConfirm = { title, description ->
+                            showAddAlertDialog = false
+                            dashboardViewModel.createAlert(title, description)
+                        },
+                    )
+                }
+
+                if (showAddThreatDialog) {
+                    AddThreatDialog(
+                        onDismiss = { showAddThreatDialog = false },
+                        onConfirm = { name ->
+                            showAddThreatDialog = false
+                            pendingThreatName = name
+                            pickThreatPhotos.launch(
+                                PickVisualMediaRequest(
+                                    ActivityResultContracts.PickVisualMedia.ImageOnly
+                                )
                             )
                         },
                     )
@@ -95,6 +144,110 @@ class DashboardActivity : ComponentActivity() {
 // ----------------------------------------------------------------
 // Enrollment setup dialog — collects name + role before opening camera
 // ----------------------------------------------------------------
+
+@Composable
+private fun AddAlertDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (title: String, description: String) -> Unit,
+) {
+    var title by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    val titleValid = title.trim().length >= 2
+    val descriptionValid = description.trim().length >= 2
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New Alert", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Title") },
+                    placeholder = { Text("e.g. Front gate motion") },
+                    singleLine = true,
+                    isError = title.isNotEmpty() && !titleValid,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Description") },
+                    placeholder = { Text("What did the robot observe?") },
+                    isError = description.isNotEmpty() && !descriptionValid,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (titleValid && descriptionValid) {
+                        onConfirm(title.trim(), description.trim())
+                    }
+                },
+                enabled = titleValid && descriptionValid,
+            ) {
+                Text("Save Alert")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+@Composable
+private fun AddThreatDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (name: String) -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    val nameValid = name.trim().length >= 2
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Known Threat", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Person's name") },
+                    placeholder = { Text("e.g. Unknown intruder") },
+                    singleLine = true,
+                    isError = name.isNotEmpty() && !nameValid,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Words
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    text = "Next, pick up to 10 photos of this person from your gallery.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (nameValid) onConfirm(name.trim()) },
+                enabled = nameValid,
+            ) {
+                Text("Pick Photos")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
 
 @Composable
 private fun EnrollMemberDialog(

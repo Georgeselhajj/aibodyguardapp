@@ -1,6 +1,8 @@
 package com.aibodyguard.app.dashboard.model
 
 import androidx.annotation.DrawableRes
+import com.aibodyguard.app.enrollment.model.PersonRole
+import java.util.UUID
 
 enum class SecurityMode {
     HOME,
@@ -15,7 +17,15 @@ data class Alert(
 
 data class Member(
     val name: String,
-    @DrawableRes val imageRes: Int
+    @DrawableRes val imageRes: Int,
+    val id: String = UUID.randomUUID().toString(),
+    val role: PersonRole = PersonRole.FAMILY_MEMBER
+)
+
+data class ThreatPerson(
+    val name: String,
+    val photoUris: List<String>,
+    val id: String = UUID.randomUUID().toString()
 )
 
 data class CarouselItem(

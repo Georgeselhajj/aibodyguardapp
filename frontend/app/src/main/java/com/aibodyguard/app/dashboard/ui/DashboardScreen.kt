@@ -25,6 +25,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -54,52 +57,78 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.aibodyguard.app.dashboard.DashboardViewModel
 import com.aibodyguard.app.dashboard.model.Alert
 import com.aibodyguard.app.dashboard.model.CarouselItem
 import com.aibodyguard.app.dashboard.model.Member
 import com.aibodyguard.app.dashboard.model.SecurityMode
+import com.aibodyguard.app.dashboard.model.ThreatPerson
 import com.aibodyguard.app.ui.theme.AIBodyguardTheme
 
 @Composable
 fun DashboardRoute(
     viewModel: DashboardViewModel = viewModel(),
-    onAddTrustedMember: () -> Unit = {}
+    onAddTrustedMember: () -> Unit = {},
+    onAddAlert: () -> Unit = {},
+    onAddThreat: () -> Unit = {}
 ) {
     val robotConnected by viewModel.robotConnected.collectAsStateWithLifecycle()
+    val robotPowered by viewModel.robotPowered.collectAsStateWithLifecycle()
     val securityMode by viewModel.securityMode.collectAsStateWithLifecycle()
     val alerts by viewModel.alerts.collectAsStateWithLifecycle()
     val trustedMembers by viewModel.trustedMembers.collectAsStateWithLifecycle()
+    val threats by viewModel.threats.collectAsStateWithLifecycle()
 
     DashboardScreen(
         robotConnected = robotConnected,
+        robotPowered = robotPowered,
         securityMode = securityMode,
         alerts = alerts,
         trustedMembers = trustedMembers,
+        threats = threats,
         carouselItems = viewModel.carouselItems,
         onSecurityModeSelected = viewModel::onSecurityModeSelected,
+        onToggleRobotPower = viewModel::onToggleRobotPower,
         onAddTrustedMember = {
             viewModel.onAddTrustedMember()
             onAddTrustedMember()
-        }
+        },
+        onRemoveTrustedMember = viewModel::onRemoveMember,
+        onAddAlert = onAddAlert,
+        onAddThreat = onAddThreat,
+        onRemoveThreat = viewModel::onRemoveThreat
     )
 }
 
 @Composable
 fun DashboardScreen(
     robotConnected: Boolean,
+    robotPowered: Boolean,
     securityMode: SecurityMode,
     alerts: List<Alert>,
     trustedMembers: List<Member>,
+    threats: List<ThreatPerson>,
     carouselItems: List<CarouselItem>,
     onSecurityModeSelected: (SecurityMode) -> Unit,
+    onToggleRobotPower: () -> Unit,
     onAddTrustedMember: () -> Unit,
+    onRemoveTrustedMember: (String) -> Unit,
+    onAddAlert: () -> Unit,
+    onAddThreat: () -> Unit,
+    onRemoveThreat: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { DashboardTopBar(robotConnected = robotConnected) }
+        topBar = {
+            DashboardTopBar(
+                robotConnected = robotConnected,
+                robotPowered = robotPowered,
+                onToggleRobotPower = onToggleRobotPower
+            )
+        }
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -112,7 +141,7 @@ fun DashboardScreen(
                 RobotInfoCarouselSection(carouselItems = carouselItems)
             }
             item {
-                AlertsHeader()
+                AlertsHeader(onAddAlert = onAddAlert)
             }
             items(alerts) { alert ->
                 AlertCard(alert = alert)
@@ -126,7 +155,15 @@ fun DashboardScreen(
             item {
                 TrustedMembersSection(
                     members = trustedMembers,
-                    onAddTrustedMember = onAddTrustedMember
+                    onAddTrustedMember = onAddTrustedMember,
+                    onRemoveTrustedMember = onRemoveTrustedMember
+                )
+            }
+            item {
+                ThreatsSection(
+                    threats = threats,
+                    onAddThreat = onAddThreat,
+                    onRemoveThreat = onRemoveThreat
                 )
             }
         }
@@ -135,7 +172,11 @@ fun DashboardScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DashboardTopBar(robotConnected: Boolean) {
+private fun DashboardTopBar(
+    robotConnected: Boolean,
+    robotPowered: Boolean,
+    onToggleRobotPower: () -> Unit
+) {
     TopAppBar(
         title = {
             Text(
@@ -145,6 +186,11 @@ private fun DashboardTopBar(robotConnected: Boolean) {
             )
         },
         actions = {
+            RobotPowerButton(
+                robotPowered = robotPowered,
+                onToggleRobotPower = onToggleRobotPower
+            )
+            Spacer(modifier = Modifier.width(8.dp))
             RobotStatusIndicator(robotConnected = robotConnected)
             Spacer(modifier = Modifier.width(16.dp))
         },
@@ -153,6 +199,25 @@ private fun DashboardTopBar(robotConnected: Boolean) {
             titleContentColor = MaterialTheme.colorScheme.onBackground
         )
     )
+}
+
+@Composable
+private fun RobotPowerButton(
+    robotPowered: Boolean,
+    onToggleRobotPower: () -> Unit
+) {
+    val tint = if (robotPowered) {
+        MaterialTheme.colorScheme.secondary
+    } else {
+        MaterialTheme.colorScheme.error
+    }
+    IconButton(onClick = onToggleRobotPower) {
+        Icon(
+            imageVector = Icons.Default.PowerSettingsNew,
+            contentDescription = if (robotPowered) "Turn robot off" else "Turn robot on",
+            tint = tint
+        )
+    }
 }
 
 @Composable
@@ -294,11 +359,25 @@ private fun FeatureCard(
 }
 
 @Composable
-private fun AlertsHeader() {
-    SectionHeader(
-        title = "Recent Alerts",
-        subtitle = "Latest robot notifications and incident summaries."
-    )
+private fun AlertsHeader(onAddAlert: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        SectionHeader(
+            title = "Recent Alerts",
+            subtitle = "Latest robot notifications and incident summaries.",
+            modifier = Modifier.weight(1f)
+        )
+        IconButton(onClick = onAddAlert) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "Add alert",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
 }
 
 @Composable
@@ -441,7 +520,8 @@ private fun RowScope.ModeButton(
 @Composable
 private fun TrustedMembersSection(
     members: List<Member>,
-    onAddTrustedMember: () -> Unit
+    onAddTrustedMember: () -> Unit,
+    onRemoveTrustedMember: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(
@@ -463,46 +543,216 @@ private fun TrustedMembersSection(
         }
 
         LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(members) { member ->
-                MemberCard(member = member)
+            items(members, key = { it.id }) { member ->
+                MemberCard(
+                    member = member,
+                    onRemove = { onRemoveTrustedMember(member.id) }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun MemberCard(member: Member) {
-    Card(
-        modifier = Modifier.width(128.dp),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+private fun MemberCard(
+    member: Member,
+    onRemove: () -> Unit
+) {
+    Box(modifier = Modifier.width(128.dp)) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
-            Box(
+            Column(
                 modifier = Modifier
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Image(
-                    painter = painterResource(id = member.imageRes),
-                    contentDescription = member.name,
-                    modifier = Modifier.size(34.dp),
-                    contentScale = ContentScale.Fit
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = member.imageRes),
+                        contentDescription = member.name,
+                        modifier = Modifier.size(34.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+
+                Text(
+                    text = member.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = member.role.displayName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
 
-            Text(
-                text = member.name,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Medium
+        RemoveBadge(
+            contentDescription = "Remove ${member.name}",
+            onClick = onRemove,
+            modifier = Modifier.align(Alignment.TopEnd)
+        )
+    }
+}
+
+@Composable
+private fun ThreatsSection(
+    threats: List<ThreatPerson>,
+    onAddThreat: () -> Unit,
+    onRemoveThreat: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            SectionHeader(
+                title = "Known Threats",
+                subtitle = "People the robot should always flag — added from gallery photos.",
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = onAddThreat) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add threat person",
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+
+        if (threats.isEmpty()) {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Report,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        text = "No threats registered. Tap + to upload pictures of a person to flag.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(threats, key = { it.id }) { threat ->
+                    ThreatCard(
+                        threat = threat,
+                        onRemove = { onRemoveThreat(threat.id) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThreatCard(
+    threat: ThreatPerson,
+    onRemove: () -> Unit
+) {
+    Box(modifier = Modifier.width(140.dp)) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val firstUri = threat.photoUris.firstOrNull()
+                    if (firstUri != null) {
+                        AsyncImage(
+                            model = firstUri,
+                            contentDescription = threat.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Report,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+                Text(
+                    text = threat.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = "${threat.photoUris.size} photo${if (threat.photoUris.size == 1) "" else "s"}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        RemoveBadge(
+            contentDescription = "Remove ${threat.name}",
+            onClick = onRemove,
+            modifier = Modifier.align(Alignment.TopEnd)
+        )
+    }
+}
+
+@Composable
+private fun RemoveBadge(
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .padding(4.dp)
+            .size(24.dp),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.error
+    ) {
+        IconButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = contentDescription,
+                tint = MaterialTheme.colorScheme.onError,
+                modifier = Modifier.size(16.dp)
             )
         }
     }
@@ -537,6 +787,7 @@ private fun DashboardScreenPreview() {
     AIBodyguardTheme {
         DashboardScreen(
             robotConnected = true,
+            robotPowered = true,
             securityMode = SecurityMode.AWAY,
             alerts = listOf(
                 Alert(
@@ -555,6 +806,7 @@ private fun DashboardScreenPreview() {
                 Member(name = "Omar", imageRes = android.R.drawable.ic_menu_camera),
                 Member(name = "Lea", imageRes = android.R.drawable.ic_menu_info_details)
             ),
+            threats = emptyList(),
             carouselItems = listOf(
                 CarouselItem(
                     title = "AI Threat Detection",
@@ -573,7 +825,12 @@ private fun DashboardScreenPreview() {
                 )
             ),
             onSecurityModeSelected = {},
-            onAddTrustedMember = {}
+            onToggleRobotPower = {},
+            onAddTrustedMember = {},
+            onRemoveTrustedMember = {},
+            onAddAlert = {},
+            onAddThreat = {},
+            onRemoveThreat = {}
         )
     }
 }

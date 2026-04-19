@@ -2,11 +2,7 @@ package com.aibodyguard.app.enrollment.ui
 
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.ImageFormat
 import android.graphics.Matrix
-import android.graphics.Rect
-import android.graphics.YuvImage
 import android.util.Base64
 import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -775,55 +771,47 @@ class FaceAnalyzer(
 // ============================================================
 
 /**
- * Converts a YUV_420_888 ImageProxy frame to a rotated, down-scaled
- * Base64 JPEG string suitable for transmission to the Pi.
+ * Converts an ImageProxy frame to a rotated, down-scaled Base64 JPEG string
+ * suitable for transmission to the Pi.
+ *
+ * Uses CameraX's built-in [ImageProxy.toBitmap], which correctly handles
+ * per-plane row/pixel strides (the manual NV21 pack produced corrupted bytes
+ * on devices whose YUV planes are padded — Samsung in particular — and the
+ * Pi rejected those frames with HTTP 422 / decode_err).
  *
  * Output: ~480×640 portrait JPEG at quality 75 ≈ 45–60 KB before base64.
  */
-@androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
 private fun ImageProxy.toBase64Jpeg(quality: Int = 75): String {
-    val mediaImage = this.image ?: return ""
+    // 1. ImageProxy → Bitmap (CameraX handles YUV→ARGB with proper strides).
+    val raw = this.toBitmap()
 
-    // 1. YUV_420_888 → NV21 bytes
-    val yBuffer = mediaImage.planes[0].buffer
-    val uBuffer = mediaImage.planes[1].buffer
-    val vBuffer = mediaImage.planes[2].buffer
-    val ySize   = yBuffer.remaining()
-    val uSize   = uBuffer.remaining()
-    val vSize   = vBuffer.remaining()
-    val nv21    = ByteArray(ySize + uSize + vSize)
-    yBuffer.get(nv21, 0, ySize)
-    vBuffer.get(nv21, ySize, vSize)          // V plane first for NV21
-    uBuffer.get(nv21, ySize + vSize, uSize)
+    // 2. Rotate to upright orientation.
+    val rotation = imageInfo.rotationDegrees
+    val rotated = if (rotation != 0) {
+        val matrix = Matrix().apply { postRotate(rotation.toFloat()) }
+        val r = Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, matrix, true)
+        if (r !== raw) raw.recycle()
+        r
+    } else raw
 
-    // 2. NV21 → JPEG
-    val yuvImage = YuvImage(nv21, ImageFormat.NV21, this.width, this.height, null)
-    val jpegOut  = ByteArrayOutputStream()
-    yuvImage.compressToJpeg(Rect(0, 0, this.width, this.height), quality, jpegOut)
-    val jpegBytes = jpegOut.toByteArray()
-
-    // 3. Rotate + scale to portrait 480×640 (or smaller)
-    val raw     = BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
-    val matrix  = Matrix().apply { postRotate(imageInfo.rotationDegrees.toFloat()) }
-    val rotated = Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, matrix, true)
-    raw.recycle()
-
-    // Scale so the longer side ≤ 640 px (keeps file size manageable)
-    val maxDim   = 640
+    // 3. Scale so the longer side ≤ 640 px (keeps file size manageable).
+    val maxDim = 640
     val scaleFactor = maxDim.toFloat() / maxOf(rotated.width, rotated.height)
-    val scaled   = if (scaleFactor < 1f) {
-        Bitmap.createScaledBitmap(
+    val scaled = if (scaleFactor < 1f) {
+        val s = Bitmap.createScaledBitmap(
             rotated,
-            (rotated.width  * scaleFactor).toInt(),
+            (rotated.width * scaleFactor).toInt(),
             (rotated.height * scaleFactor).toInt(),
             true,
         )
+        if (s !== rotated) rotated.recycle()
+        s
     } else rotated
 
+    // 4. Encode to JPEG → Base64.
     val finalOut = ByteArrayOutputStream()
     scaled.compress(Bitmap.CompressFormat.JPEG, quality, finalOut)
-    if (scaled !== rotated) scaled.recycle()
-    rotated.recycle()
+    scaled.recycle()
 
     return Base64.encodeToString(finalOut.toByteArray(), Base64.NO_WRAP)
 }

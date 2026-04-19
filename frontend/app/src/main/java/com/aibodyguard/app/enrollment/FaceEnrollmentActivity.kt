@@ -29,6 +29,7 @@ class FaceEnrollmentActivity : ComponentActivity() {
     private var showSuccess = false
     private var successName = ""
     private var successSamples = 0
+    private var enrolledRole: PersonRole = PersonRole.FAMILY_MEMBER
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,6 +39,7 @@ class FaceEnrollmentActivity : ComponentActivity() {
         val role = intent.getStringExtra(EXTRA_ROLE)
             ?.let { runCatching { PersonRole.valueOf(it) }.getOrNull() }
             ?: PersonRole.FAMILY_MEMBER
+        enrolledRole = role
 
         setContent {
             AIBodyguardTheme {
@@ -48,6 +50,7 @@ class FaceEnrollmentActivity : ComponentActivity() {
                         onDone  = {
                             setResult(RESULT_OK, Intent().apply {
                                 putExtra(EXTRA_ENROLLED_NAME, successName)
+                                putExtra(EXTRA_ENROLLED_ROLE, enrolledRole.name)
                             })
                             finish()
                         },
@@ -72,6 +75,7 @@ class FaceEnrollmentActivity : ComponentActivity() {
         const val EXTRA_NAME          = "extra_enrollment_name"
         const val EXTRA_ROLE          = "extra_enrollment_role"
         const val EXTRA_ENROLLED_NAME = "extra_enrolled_name"
+        const val EXTRA_ENROLLED_ROLE = "extra_enrolled_role"
 
         fun createIntent(
             context: Context,

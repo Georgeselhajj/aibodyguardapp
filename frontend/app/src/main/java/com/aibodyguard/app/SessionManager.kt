@@ -8,11 +8,12 @@ class SessionManager(context: Context) {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
 
     fun saveSession(authResponse: AuthResponse) {
+        // commit() is synchronous so the session survives an immediate app kill.
         preferences.edit()
             .putString(KEY_TOKEN, authResponse.token)
             .putString(KEY_EMAIL, authResponse.email)
             .putString(KEY_ROLE, authResponse.role)
-            .apply()
+            .commit()
     }
 
     fun getSession(): AuthResponse? {
@@ -27,8 +28,10 @@ class SessionManager(context: Context) {
         )
     }
 
+    fun getEmail(): String? = preferences.getString(KEY_EMAIL, null)
+
     fun clearSession() {
-        preferences.edit().clear().apply()
+        preferences.edit().clear().commit()
     }
 
     private companion object {

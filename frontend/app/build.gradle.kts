@@ -73,5 +73,8 @@ dependencies {
     // ML Kit Face Detection — on-device, no network needed, head pose angles
     implementation("com.google.mlkit:face-detection:16.1.7")
 
+    // Coil — async image loading for gallery URI thumbnails (threat persons)
+    implementation("io.coil-kt:coil-compose:2.7.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
