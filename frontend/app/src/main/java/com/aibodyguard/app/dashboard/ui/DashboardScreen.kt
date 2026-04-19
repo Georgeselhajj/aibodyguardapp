@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.filled.WarningAmber
@@ -71,7 +72,8 @@ fun DashboardRoute(
     viewModel: DashboardViewModel = viewModel(),
     onAddTrustedMember: () -> Unit = {},
     onAddAlert: () -> Unit = {},
-    onAddThreat: () -> Unit = {}
+    onAddThreat: () -> Unit = {},
+    onLogout: () -> Unit = {}
 ) {
     val robotConnected by viewModel.robotConnected.collectAsStateWithLifecycle()
     val robotPowered by viewModel.robotPowered.collectAsStateWithLifecycle()
@@ -97,7 +99,8 @@ fun DashboardRoute(
         onRemoveTrustedMember = viewModel::onRemoveMember,
         onAddAlert = onAddAlert,
         onAddThreat = onAddThreat,
-        onRemoveThreat = viewModel::onRemoveThreat
+        onRemoveThreat = viewModel::onRemoveThreat,
+        onLogout = { viewModel.logout(onLogout) }
     )
 }
 
@@ -117,6 +120,7 @@ fun DashboardScreen(
     onAddAlert: () -> Unit,
     onAddThreat: () -> Unit,
     onRemoveThreat: (String) -> Unit,
+    onLogout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -126,7 +130,8 @@ fun DashboardScreen(
             DashboardTopBar(
                 robotConnected = robotConnected,
                 robotPowered = robotPowered,
-                onToggleRobotPower = onToggleRobotPower
+                onToggleRobotPower = onToggleRobotPower,
+                onLogout = onLogout
             )
         }
     ) { innerPadding ->
@@ -143,8 +148,14 @@ fun DashboardScreen(
             item {
                 AlertsHeader(onAddAlert = onAddAlert)
             }
-            items(alerts) { alert ->
-                AlertCard(alert = alert)
+            if (alerts.isEmpty()) {
+                item {
+                    EmptyAlertsCard()
+                }
+            } else {
+                items(alerts) { alert ->
+                    AlertCard(alert = alert)
+                }
             }
             item {
                 SecurityModeSection(
@@ -175,7 +186,8 @@ fun DashboardScreen(
 private fun DashboardTopBar(
     robotConnected: Boolean,
     robotPowered: Boolean,
-    onToggleRobotPower: () -> Unit
+    onToggleRobotPower: () -> Unit,
+    onLogout: () -> Unit
 ) {
     TopAppBar(
         title = {
@@ -190,9 +202,16 @@ private fun DashboardTopBar(
                 robotPowered = robotPowered,
                 onToggleRobotPower = onToggleRobotPower
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(4.dp))
             RobotStatusIndicator(robotConnected = robotConnected)
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            IconButton(onClick = onLogout) {
+                Icon(
+                    imageVector = Icons.Default.ExitToApp,
+                    contentDescription = "Logout",
+                    tint = MaterialTheme.colorScheme.onBackground
+                )
+            }
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.background,
@@ -377,6 +396,24 @@ private fun AlertsHeader(onAddAlert: () -> Unit) {
                 tint = MaterialTheme.colorScheme.primary
             )
         }
+    }
+}
+
+@Composable
+private fun EmptyAlertsCard() {
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Text(
+            text = "No alerts from the robot right now.",
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -830,7 +867,8 @@ private fun DashboardScreenPreview() {
             onRemoveTrustedMember = {},
             onAddAlert = {},
             onAddThreat = {},
-            onRemoveThreat = {}
+            onRemoveThreat = {},
+            onLogout = {}
         )
     }
 }

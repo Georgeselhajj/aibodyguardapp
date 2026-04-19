@@ -8,16 +8,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -32,21 +26,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
+import com.aibodyguard.app.MainActivity
 import com.aibodyguard.app.SessionManager
-import com.aibodyguard.app.dashboard.model.Member
+import com.aibodyguard.app.dashboard.ui.DashboardRoute
 import com.aibodyguard.app.enrollment.FaceEnrollmentActivity
 import com.aibodyguard.app.enrollment.model.PersonRole
-import com.aibodyguard.app.dashboard.ui.DashboardRoute
 import com.aibodyguard.app.ui.theme.AIBodyguardTheme
 
 class DashboardActivity : ComponentActivity() {
 
     private lateinit var dashboardViewModel: DashboardViewModel
+    private lateinit var sessionManager: SessionManager
 
     // Result launcher — receives RESULT_OK when enrollment succeeds
     private val enrollmentLauncher = registerForActivityResult(
@@ -69,7 +63,8 @@ class DashboardActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         dashboardViewModel = ViewModelProvider(this)[DashboardViewModel::class.java]
-        dashboardViewModel.bindUser(SessionManager(this).getEmail())
+        sessionManager = SessionManager(this)
+        dashboardViewModel.bindUser(sessionManager.getEmail())
 
         setContent {
             AIBodyguardTheme {
@@ -89,10 +84,15 @@ class DashboardActivity : ComponentActivity() {
                 }
 
                 DashboardRoute(
-                    viewModel         = dashboardViewModel,
+                    viewModel          = dashboardViewModel,
                     onAddTrustedMember = { showEnrollDialog = true },
-                    onAddAlert        = { showAddAlertDialog = true },
-                    onAddThreat       = { showAddThreatDialog = true },
+                    onAddAlert         = { showAddAlertDialog = true },
+                    onAddThreat        = { showAddThreatDialog = true },
+                    onLogout           = {
+                        sessionManager.clearSession()
+                        startActivity(android.content.Intent(this, MainActivity::class.java))
+                        finish()
+                    },
                 )
 
                 if (showEnrollDialog) {
@@ -142,7 +142,7 @@ class DashboardActivity : ComponentActivity() {
 }
 
 // ----------------------------------------------------------------
-// Enrollment setup dialog — collects name + role before opening camera
+// Dialogs
 // ----------------------------------------------------------------
 
 @Composable

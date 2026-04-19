@@ -33,3 +33,31 @@ data class CarouselItem(
     val description: String,
     @DrawableRes val imageRes: Int
 )
+
+data class RobotStatusResponse(
+    val mode: String = "HOME",
+    val owner_present: Boolean = false,
+    val alert_count: Int = 0,
+    val running: Boolean = false,
+)
+
+data class RobotAlertResponse(
+    val id: String,
+    val level: String,
+    val person_id: String,
+    val name: String,
+    val explanation: List<String> = emptyList(),
+    val track_id: Int,
+    val timestamp: String,
+)
+
+data class RobotModeRequest(
+    val mode: String,
+)
+
+data class RobotCommandResponse(
+    val success: Boolean? = null,
+    val status: String? = null,
+    val mode: String? = null,
+    val message: String? = null,
+)

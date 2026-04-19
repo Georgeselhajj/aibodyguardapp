@@ -19,7 +19,7 @@ object RobotRetrofitClient {
     // ------------------------------------------------------------------ config
 
     /** Mutable so it can be updated from a settings screen later. */
-    private var piIpAddress: String = "192.168.1.100"
+    private var piIpAddress: String = "10.42.0.1"
     private const val PI_PORT       = 5000
 
     fun setPiIpAddress(ip: String) {

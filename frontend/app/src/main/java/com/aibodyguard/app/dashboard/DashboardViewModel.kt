@@ -11,9 +11,12 @@ import com.aibodyguard.app.dashboard.model.SecurityMode
 import com.aibodyguard.app.dashboard.model.ThreatPerson
 import com.aibodyguard.app.enrollment.model.PersonRole
 import com.aibodyguard.app.network.RetrofitClient
+import com.aibodyguard.app.network.RobotRetrofitClient
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -22,9 +25,10 @@ import java.util.TimeZone
 
 class DashboardViewModel : ViewModel() {
 
+    private val robotRepository = RobotDashboardRepository(RobotRetrofitClient.enrollmentApi)
     private val alertRepository = AlertRepository(RetrofitClient.alertApi)
 
-    private val _robotConnected = MutableStateFlow(true)
+    private val _robotConnected = MutableStateFlow(false)
     val robotConnected: StateFlow<Boolean> = _robotConnected.asStateFlow()
 
     private val _robotPowered = MutableStateFlow(true)
@@ -39,34 +43,13 @@ class DashboardViewModel : ViewModel() {
     private val _alertError = MutableStateFlow<String?>(null)
     val alertError: StateFlow<String?> = _alertError.asStateFlow()
 
-    private var currentUserEmail: String? = null
-
-    private val _trustedMembers = MutableStateFlow(
-        listOf(
-            Member(
-                name = "Maya",
-                imageRes = android.R.drawable.ic_menu_myplaces,
-                id = "seed_maya",
-                role = PersonRole.OWNER
-            ),
-            Member(
-                name = "Omar",
-                imageRes = android.R.drawable.ic_menu_camera,
-                id = "seed_omar",
-                role = PersonRole.FAMILY_MEMBER
-            ),
-            Member(
-                name = "Lea",
-                imageRes = android.R.drawable.ic_menu_info_details,
-                id = "seed_lea",
-                role = PersonRole.FAMILY_MEMBER
-            )
-        )
-    )
+    private val _trustedMembers = MutableStateFlow<List<Member>>(emptyList())
     val trustedMembers: StateFlow<List<Member>> = _trustedMembers.asStateFlow()
 
     private val _threats = MutableStateFlow<List<ThreatPerson>>(emptyList())
     val threats: StateFlow<List<ThreatPerson>> = _threats.asStateFlow()
+
+    private var currentUserEmail: String? = null
 
     val carouselItems: List<CarouselItem> = listOf(
         CarouselItem(
@@ -86,38 +69,38 @@ class DashboardViewModel : ViewModel() {
         )
     )
 
+    init {
+        bootstrapDefaultMode()
+        startRobotPolling()
+    }
+
+    /** Bind the signed-in user so DB-backed alerts can be loaded for them. */
     fun bindUser(email: String?) {
         if (email == null || email == currentUserEmail) return
         currentUserEmail = email
-        refreshAlerts()
+        viewModelScope.launch { refreshAllAlerts() }
     }
 
-    fun refreshAlerts() {
-        val email = currentUserEmail ?: return
+    fun logout(onComplete: () -> Unit) {
         viewModelScope.launch {
-            alertRepository.list(email)
-                .onSuccess { dtos -> _alerts.value = dtos.map { it.toUiAlert() } }
-                .onFailure { _alertError.value = it.message }
+            robotRepository.stopDetection()
+            currentUserEmail = null
+            _alerts.value = emptyList()
+            onComplete()
         }
-    }
-
-    fun createAlert(title: String, description: String) {
-        val email = currentUserEmail ?: return
-        viewModelScope.launch {
-            alertRepository.create(title, description, email)
-                .onSuccess { dto ->
-                    _alerts.value = listOf(dto.toUiAlert()) + _alerts.value
-                }
-                .onFailure { _alertError.value = it.message }
-        }
-    }
-
-    fun consumeAlertError() {
-        _alertError.value = null
     }
 
     fun onSecurityModeSelected(mode: SecurityMode) {
-        _securityMode.value = mode
+        viewModelScope.launch {
+            robotRepository.applyModeAndStart(mode)
+                .onSuccess {
+                    _securityMode.value = mode
+                    refreshRobotStatusAndAlerts()
+                }
+                .onFailure {
+                    _robotConnected.value = false
+                }
+        }
     }
 
     /** Toggle the robot power state. Backend wiring will be added later. */
@@ -126,25 +109,16 @@ class DashboardViewModel : ViewModel() {
     }
 
     fun onAddTrustedMember() {
-        // Handled by DashboardActivity — opens EnrollMemberDialog → FaceEnrollmentActivity.
+        // Handled by DashboardActivity, which opens the enrollment flow.
     }
 
-    /** Called when FaceEnrollmentActivity returns RESULT_OK with an enrolled name. */
+    /** Called when FaceEnrollmentActivity returns RESULT_OK. */
     fun onMemberEnrolled(name: String, role: PersonRole = PersonRole.FAMILY_MEMBER) {
-        val icon = if (role == PersonRole.OWNER) {
-            android.R.drawable.ic_menu_myplaces
-        } else {
-            android.R.drawable.ic_menu_camera
-        }
-        _trustedMembers.value = _trustedMembers.value + Member(
-            name = name,
-            imageRes = icon,
-            role = role
-        )
+        viewModelScope.launch { refreshTrustedMembers() }
     }
 
     /**
-     * Remove a trusted member from the list.
+     * Remove a trusted member from the list locally.
      * TODO: also call EnrollmentRepository.deletePerson(memberId) once the Pi
      *       endpoint is wired up so the robot stops recognizing them.
      */
@@ -169,6 +143,96 @@ class DashboardViewModel : ViewModel() {
         _threats.value = _threats.value.filterNot { it.id == threatId }
     }
 
+    /** Create a user-authored alert in the Spring Boot DB. */
+    fun createAlert(title: String, description: String) {
+        val email = currentUserEmail ?: return
+        viewModelScope.launch {
+            alertRepository.create(title, description, email)
+                .onSuccess { dto ->
+                    _alerts.value = listOf(dto.toUiAlert()) + _alerts.value
+                }
+                .onFailure { _alertError.value = it.message }
+        }
+    }
+
+    fun refreshAlerts() {
+        viewModelScope.launch { refreshAllAlerts() }
+    }
+
+    fun consumeAlertError() {
+        _alertError.value = null
+    }
+
+    private fun refreshDashboard() {
+        viewModelScope.launch {
+            refreshRobotStatusAndAlerts()
+            refreshTrustedMembers()
+        }
+    }
+
+    private fun bootstrapDefaultMode() {
+        viewModelScope.launch {
+            _securityMode.value = SecurityMode.HOME
+
+            robotRepository.applyModeAndStart(SecurityMode.HOME)
+                .onFailure {
+                    _robotConnected.value = false
+                }
+
+            refreshDashboard()
+        }
+    }
+
+    private fun startRobotPolling() {
+        viewModelScope.launch {
+            while (isActive) {
+                refreshRobotStatusAndAlerts()
+                delay(3000)
+            }
+        }
+    }
+
+    private suspend fun refreshRobotStatusAndAlerts() {
+        robotRepository.fetchStatus()
+            .onSuccess { status ->
+                _robotConnected.value = true
+                _securityMode.value = if (status.mode.equals("AWAY", ignoreCase = true)) {
+                    SecurityMode.AWAY
+                } else {
+                    SecurityMode.HOME
+                }
+            }
+            .onFailure {
+                _robotConnected.value = false
+            }
+
+        refreshAllAlerts()
+    }
+
+    /** Combine DB-stored user alerts (top) with Pi-polled robot alerts (below). */
+    private suspend fun refreshAllAlerts() {
+        val email = currentUserEmail
+        val dbAlerts = if (email != null) {
+            alertRepository.list(email).getOrNull()?.map { it.toUiAlert() }.orEmpty()
+        } else {
+            emptyList()
+        }
+        val robotAlerts = robotRepository.fetchAlerts().getOrNull().orEmpty()
+        _alerts.value = dbAlerts + robotAlerts
+    }
+
+    private suspend fun refreshTrustedMembers() {
+        robotRepository.fetchTrustedMembers()
+            .onSuccess { members ->
+                _trustedMembers.value = members
+            }
+            .onFailure {
+                if (_trustedMembers.value.isEmpty()) {
+                    _trustedMembers.value = emptyList()
+                }
+            }
+    }
+
     private fun AlertDto.toUiAlert(): Alert = Alert(
         title = title,
         description = description,
@@ -187,7 +251,6 @@ class DashboardViewModel : ViewModel() {
     }
 
     private fun parseIsoInstant(iso: String): Date? {
-        // Spring serializes java.time.Instant as e.g. "2026-04-18T12:34:56.789Z".
         val patterns = listOf(
             "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
             "yyyy-MM-dd'T'HH:mm:ssXXX",

@@ -38,10 +38,9 @@ class EnrollmentRepository(private val api: EnrollmentApi) {
         onProgress: (Float) -> Unit = {},
     ): Result<EnrollmentResponse> = withContext(Dispatchers.IO) {
 
-        // Split into batches of 20 to keep individual request payloads small
-        // and allow progress reporting. The Pi handles append-mode automatically.
-        val batchSize    = 20
-        val batches      = images.chunked(batchSize)
+        // Keep request payloads manageable, but avoid a tiny final batch because
+        // the Pi enrollment server rejects requests smaller than 10 images.
+        val batches      = buildUploadBatches(images)
         var lastResponse: EnrollmentResponse? = null
 
         batches.forEachIndexed { batchIdx, batch ->
@@ -84,6 +83,24 @@ class EnrollmentRepository(private val api: EnrollmentApi) {
 
         lastResponse?.let { Result.success(it) }
             ?: Result.failure(Exception("No response received from server."))
+    }
+
+    private fun buildUploadBatches(images: List<String>): List<List<String>> {
+        val maxBatchSize = 20
+        val initialBatches = images.chunked(maxBatchSize)
+
+        if (initialBatches.size <= 1) {
+            return initialBatches
+        }
+
+        val lastBatchSize = initialBatches.last().size
+        if (lastBatchSize >= 10) {
+            return initialBatches
+        }
+
+        val batchCount = initialBatches.size
+        val balancedBatchSize = kotlin.math.ceil(images.size / batchCount.toDouble()).toInt()
+        return images.chunked(balancedBatchSize)
     }
 
     // ------------------------------------------------------------------
