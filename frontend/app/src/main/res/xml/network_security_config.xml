@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow HTTP for all hosts by default (Spring Boot backend uses plain HTTP) -->
+    <base-config cleartextTrafficPermitted="true"/>
+    <!-- Pi: HTTPS only, trust only the bundled self-signed cert -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">10.42.0.1</domain>
+        <trust-anchors>
+            <certificates src="@raw/pi_cert"/>
+        </trust-anchors>
+    </domain-config>
+</network-security-config>
